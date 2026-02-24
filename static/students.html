@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estudiantes · Motor de Recomendación Docente</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div id="navbar"></div>
+
+  <div class="layout">
+    <div id="sidebar"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1 class="page-title">👨‍🎓 Estudiantes</h1>
+        <button class="btn btn-primary" onclick="openModal('modal-student')">+ Nuevo estudiante</button>
+      </div>
+
+      <div id="alert-container"></div>
+
+      <div class="card">
+        <div class="search-bar">
+          <input type="text" id="search" class="form-control" placeholder="Buscar por nombre o código...">
+          <button class="btn btn-secondary" onclick="loadStudents()">Buscar</button>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Código</th>
+                <th>Edad</th>
+                <th>Promedio</th>
+                <th>Trabaja</th>
+                <th>Modalidad</th>
+                <th>Disciplina</th>
+                <th>Madurez</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="students-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL CREAR/EDITAR -->
+  <div class="modal-overlay" id="modal-student">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="modal-title">Nuevo Estudiante</span>
+        <button class="modal-close" onclick="closeModal('modal-student')">✕</button>
+      </div>
+
+      <div id="modal-alert"></div>
+      <input type="hidden" id="student-id">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nombre completo</label>
+          <input type="text" id="s-nombre" class="form-control">
+        </div>
+        <div class="form-group">
+          <label>Código estudiantil</label>
+          <input type="text" id="s-codigo" class="form-control">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Edad</label>
+          <input type="number" id="s-edad" class="form-control" min="15" max="60">
+        </div>
+        <div class="form-group">
+          <label>Promedio académico (0.0 - 5.0)</label>
+          <input type="number" id="s-promedio" class="form-control" min="0" max="5" step="0.1">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Modalidad</label>
+          <select id="s-modalidad" class="form-control">
+            <option value="presencial">Presencial</option>
+            <option value="virtual">Virtual</option>
+            <option value="mixta">Mixta</option>
+          </select>
+        </div>
+        <div class="form-group" style="display:flex;gap:1.5rem;align-items:center;padding-top:1.8rem">
+          <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
+            <input type="checkbox" id="s-trabaja"> Trabaja
+          </label>
+          <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
+            <input type="checkbox" id="s-recien"> Recién graduado
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Disciplina: <span id="disciplina-val">3</span>/5</label>
+        <div class="slider-group">
+          <span>1</span>
+          <input type="range" id="s-disciplina" min="1" max="5" value="3"
+            oninput="document.getElementById('disciplina-val').textContent=this.value">
+          <span>5</span>
+          <span class="slider-value" id="disciplina-val2"></span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Madurez emocional: <span id="madurez-val">3</span>/5</label>
+        <div class="slider-group">
+          <span>1</span>
+          <input type="range" id="s-madurez" min="1" max="5" value="3"
+            oninput="document.getElementById('madurez-val').textContent=this.value">
+          <span>5</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0.8rem;justify-content:flex-end;margin-top:1rem">
+        <button class="btn btn-secondary" onclick="closeModal('modal-student')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveStudent()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    requireAuth()
+    renderNavbar(document.getElementById('navbar'))
+    renderSidebar(document.getElementById('sidebar'), 'students')
+
+    const canEdit = requireRole('ADMIN', 'COORDINADOR')
+
+    async function loadStudents() {
+      const search = document.getElementById('search').value
+      const students = await api.getStudents(search)
+      const tbody = document.getElementById('students-table')
+
+      tbody.innerHTML = students.map(s => `
+        <tr>
+          <td>${s.nombre}</td>
+          <td><code>${s.codigo}</code></td>
+          <td>${s.edad}</td>
+          <td><strong>${s.promedio}</strong></td>
+          <td>${s.trabaja ? '✅' : '—'}</td>
+          <td>${s.modalidad}</td>
+          <td>${s.disciplina}/5</td>
+          <td>${s.madurez_emocional}/5</td>
+          <td>
+            ${canEdit ? `
+              <button class="btn btn-secondary btn-sm" onclick="editStudent(${JSON.stringify(s).replace(/"/g, '&quot;')})">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteStudent(${s.id})">🗑️</button>
+            ` : '—'}
+          </td>
+        </tr>
+      `).join('')
+    }
+
+    function editStudent(s) {
+      document.getElementById('modal-title').textContent = 'Editar Estudiante'
+      document.getElementById('student-id').value = s.id
+      document.getElementById('s-nombre').value = s.nombre
+      document.getElementById('s-codigo').value = s.codigo
+      document.getElementById('s-edad').value = s.edad
+      document.getElementById('s-promedio').value = s.promedio
+      document.getElementById('s-modalidad').value = s.modalidad
+      document.getElementById('s-trabaja').checked = s.trabaja
+      document.getElementById('s-recien').checked = s.recien_graduado
+      document.getElementById('s-disciplina').value = s.disciplina
+      document.getElementById('disciplina-val').textContent = s.disciplina
+      document.getElementById('s-madurez').value = s.madurez_emocional
+      document.getElementById('madurez-val').textContent = s.madurez_emocional
+      openModal('modal-student')
+    }
+
+    function resetForm() {
+      document.getElementById('modal-title').textContent = 'Nuevo Estudiante'
+      document.getElementById('student-id').value = ''
+      document.getElementById('s-nombre').value = ''
+      document.getElementById('s-codigo').value = ''
+      document.getElementById('s-edad').value = ''
+      document.getElementById('s-promedio').value = ''
+      document.getElementById('s-modalidad').value = 'presencial'
+      document.getElementById('s-trabaja').checked = false
+      document.getElementById('s-recien').checked = false
+      document.getElementById('s-disciplina').value = 3
+      document.getElementById('disciplina-val').textContent = 3
+      document.getElementById('s-madurez').value = 3
+      document.getElementById('madurez-val').textContent = 3
+    }
+
+    async function saveStudent() {
+      const id = document.getElementById('student-id').value
+      const data = {
+        nombre: document.getElementById('s-nombre').value,
+        codigo: document.getElementById('s-codigo').value,
+        edad: parseInt(document.getElementById('s-edad').value),
+        promedio: parseFloat(document.getElementById('s-promedio').value),
+        modalidad: document.getElementById('s-modalidad').value,
+        trabaja: document.getElementById('s-trabaja').checked,
+        recien_graduado: document.getElementById('s-recien').checked,
+        disciplina: parseInt(document.getElementById('s-disciplina').value),
+        madurez_emocional: parseInt(document.getElementById('s-madurez').value)
+      }
+
+      try {
+        if (id) {
+          await api.updateStudent(id, data)
+        } else {
+          await api.createStudent(data)
+        }
+        closeModal('modal-student')
+        resetForm()
+        loadStudents()
+        showAlert('alert-container', id ? 'Estudiante actualizado' : 'Estudiante creado', 'success')
+      } catch (e) {
+        showAlert('modal-alert', e.message)
+      }
+    }
+
+    async function deleteStudent(id) {
+      if (!confirm('¿Eliminar este estudiante?')) return
+      try {
+        await api.deleteStudent(id)
+        loadStudents()
+        showAlert('alert-container', 'Estudiante eliminado', 'success')
+      } catch (e) {
+        showAlert('alert-container', e.message)
+      }
+    }
+
+    document.querySelector('[onclick="openModal(\'modal-student\')"]')
+      .addEventListener('click', resetForm)
+
+    loadStudents()
+  </script>
+</body>
+</html>

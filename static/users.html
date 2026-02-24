@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Usuarios · Motor de Recomendación Docente</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div id="navbar"></div>
+
+  <div class="layout">
+    <div id="sidebar"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1 class="page-title">👥 Usuarios</h1>
+        <button class="btn btn-primary" onclick="resetForm();openModal('modal-user')">+ Nuevo usuario</button>
+      </div>
+
+      <div id="alert-container"></div>
+
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Estado</th>
+                <th>Creado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="users-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL CREAR/EDITAR -->
+  <div class="modal-overlay" id="modal-user">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="modal-title">Nuevo Usuario</span>
+        <button class="modal-close" onclick="closeModal('modal-user')">✕</button>
+      </div>
+
+      <div id="modal-alert"></div>
+      <input type="hidden" id="user-id">
+
+      <div class="form-group">
+        <label>Nombre completo</label>
+        <input type="text" id="u-nombre" class="form-control" placeholder="Ej: María García">
+      </div>
+
+      <div class="form-group">
+        <label>Correo electrónico</label>
+        <input type="email" id="u-email" class="form-control" placeholder="correo@ejemplo.com">
+      </div>
+
+      <div class="form-group" id="password-group">
+        <label>Contraseña</label>
+        <input type="password" id="u-password" class="form-control" placeholder="Mínimo 6 caracteres">
+      </div>
+
+      <div class="form-group">
+        <label>Rol</label>
+        <select id="u-rol" class="form-control">
+          <option value="ADMIN">ADMIN</option>
+          <option value="COORDINADOR">COORDINADOR</option>
+          <option value="CONSULTOR">CONSULTOR</option>
+          <option value="PROFESOR">PROFESOR</option>
+          <option value="ESTUDIANTE">ESTUDIANTE</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="status-group" style="display:none">
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer">
+          <input type="checkbox" id="u-active"> Usuario activo
+        </label>
+      </div>
+
+      <div style="display:flex;gap:0.8rem;justify-content:flex-end;margin-top:1rem">
+        <button class="btn btn-secondary" onclick="closeModal('modal-user')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveUser()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    requireAuth()
+
+    // Solo ADMIN puede estar aquí
+    if (!requireRole('ADMIN')) {
+      window.location.href = 'dashboard.html'
+    }
+
+    renderNavbar(document.getElementById('navbar'))
+    renderSidebar(document.getElementById('sidebar'), 'users')
+
+    const roleBadge = {
+      ADMIN: 'badge-admin',
+      COORDINADOR: 'badge-coordinador',
+      CONSULTOR: 'badge-consultor',
+      PROFESOR: 'badge-profesor',
+      ESTUDIANTE: 'badge-estudiante'
+    }
+
+    async function loadUsers() {
+      const users = await api.getUsers()
+      const tbody = document.getElementById('users-table')
+
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td><strong>${u.full_name}</strong></td>
+          <td>${u.email}</td>
+          <td><span class="badge ${roleBadge[u.role]}">${u.role}</span></td>
+          <td><span class="badge ${u.is_active ? 'badge-active' : 'badge-inactive'}">${u.is_active ? 'Activo' : 'Inactivo'}</span></td>
+          <td style="font-size:0.82rem;color:var(--gray-dark)">${new Date(u.created_at).toLocaleDateString('es-CO')}</td>
+          <td>
+            <button class="btn btn-secondary btn-sm" onclick="editUser(${JSON.stringify(u).replace(/"/g, '&quot;')})">✏️ Editar</button>
+            <button class="btn btn-danger btn-sm" onclick="toggleUser(${u.id}, ${u.is_active})">
+              ${u.is_active ? '🔒 Desactivar' : '🔓 Activar'}
+            </button>
+          </td>
+        </tr>
+      `).join('')
+    }
+
+    function resetForm() {
+      document.getElementById('modal-title').textContent = 'Nuevo Usuario'
+      document.getElementById('user-id').value = ''
+      document.getElementById('u-nombre').value = ''
+      document.getElementById('u-email').value = ''
+      document.getElementById('u-password').value = ''
+      document.getElementById('u-rol').value = 'COORDINADOR'
+      document.getElementById('u-active').checked = true
+      document.getElementById('password-group').style.display = 'block'
+      document.getElementById('status-group').style.display = 'none'
+      document.getElementById('u-email').disabled = false
+    }
+
+    function editUser(u) {
+      document.getElementById('modal-title').textContent = 'Editar Usuario'
+      document.getElementById('user-id').value = u.id
+      document.getElementById('u-nombre').value = u.full_name
+      document.getElementById('u-email').value = u.email
+      document.getElementById('u-email').disabled = true
+      document.getElementById('u-password').value = ''
+      document.getElementById('u-rol').value = u.role
+      document.getElementById('u-active').checked = u.is_active
+      document.getElementById('password-group').style.display = 'none'
+      document.getElementById('status-group').style.display = 'block'
+      openModal('modal-user')
+    }
+
+    async function saveUser() {
+      const id = document.getElementById('user-id').value
+
+      if (id) {
+        // Editar
+        const data = {
+          full_name: document.getElementById('u-nombre').value,
+          role: document.getElementById('u-rol').value,
+          is_active: document.getElementById('u-active').checked
+        }
+        try {
+          await api.updateUser(id, data)
+          closeModal('modal-user')
+          loadUsers()
+          showAlert('alert-container', 'Usuario actualizado', 'success')
+        } catch(e) {
+          showAlert('modal-alert', e.message)
+        }
+      } else {
+        // Crear
+        const password = document.getElementById('u-password').value
+        if (password.length < 6) {
+          showAlert('modal-alert', 'La contraseña debe tener al menos 6 caracteres')
+          return
+        }
+        const data = {
+          full_name: document.getElementById('u-nombre').value,
+          email: document.getElementById('u-email').value,
+          password,
+          role: document.getElementById('u-rol').value
+        }
+        try {
+          await api.createUser(data)
+          closeModal('modal-user')
+          loadUsers()
+          showAlert('alert-container', 'Usuario creado exitosamente', 'success')
+        } catch(e) {
+          showAlert('modal-alert', e.message)
+        }
+      }
+    }
+
+    async function toggleUser(id, currentState) {
+      const accion = currentState ? 'desactivar' : 'activar'
+      if (!confirm(`¿${accion} este usuario?`)) return
+      try {
+        await api.updateUser(id, { is_active: !currentState })
+        loadUsers()
+        showAlert('alert-container', `Usuario ${accion === 'activar' ? 'activado' : 'desactivado'}`, 'success')
+      } catch(e) {
+        showAlert('alert-container', e.message)
+      }
+    }
+
+    loadUsers()
+  </script>
+</body>
+</html>

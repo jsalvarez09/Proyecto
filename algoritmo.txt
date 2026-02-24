@@ -1,0 +1,84 @@
+FUNCIÓN recomendar_profesor(lista_estudiantes, lista_profesores):
+
+    // PASO 1: Calcular perfil colectivo del grupo
+    n = LONGITUD(lista_estudiantes)
+    
+    edad_prom       = SUMA(est.edad)             / n
+    promedio_prom   = SUMA(est.promedio)          / n
+    pct_trabaja     = SUMA(est.trabaja)           / n * 100
+    pct_recien_grad = SUMA(est.recien_graduado)   / n * 100
+    disciplina_prom = SUMA(est.disciplina)        / n
+    madurez_prom    = SUMA(est.madurez_emocional) / n
+    modalidad_pred  = MODA(est.modalidad)
+
+
+    // PASO 2: Definir pesos dinámicos según perfil del grupo
+    pesos = { rigurosidad: 0.20, flexibilidad: 0.20, carga_tareas: 0.15,
+              estilo: 0.15, exp_jovenes: 0.15, exp_adultos: 0.15 }
+
+    SI edad_prom < 20 Y pct_recien_grad > 50:
+        pesos = { rigurosidad: 0.30, exp_jovenes: 0.25, carga_tareas: 0.15,
+                  estilo: 0.15, flexibilidad: 0.10, exp_adultos: 0.05 }
+
+    SI NO SI pct_trabaja > 60 O edad_prom > 28:
+        pesos = { flexibilidad: 0.30, exp_adultos: 0.25, carga_tareas: 0.20,
+                  rigurosidad: 0.15, estilo: 0.05, exp_jovenes: 0.05 }
+
+    SI NO SI promedio_prom < 3.2:
+        pesos = { estilo: 0.25, flexibilidad: 0.25, carga_tareas: 0.15,
+                  exp_jovenes: 0.15, exp_adultos: 0.10, rigurosidad: 0.10 }
+
+    SI NO SI promedio_prom > 4.0:
+        pesos = { rigurosidad: 0.30, carga_tareas: 0.25, flexibilidad: 0.15,
+                  exp_jovenes: 0.10, exp_adultos: 0.10, estilo: 0.10 }
+
+
+    // PASO 3: Calcular puntaje de compatibilidad para cada profesor
+    scores = []
+    PARA CADA profesor EN lista_profesores:
+
+        rig_esperada   = 5 - (madurez_prom - 1)
+        flex_esperada  = 1 + (pct_trabaja / 100) * 4
+        carga_esperada = 5 - (pct_trabaja / 100) * 4
+        estilo_esp     = SI edad_prom < 22 ENTONCES 1 SI NO 2
+        expj_esperada  = SI pct_recien_grad > 40 ENTONCES 5 SI NO 3
+        expa_esperada  = SI pct_trabaja > 50 ENTONCES 5 SI NO 3
+
+        C = pesos.rigurosidad  * (1 - |profesor.rigurosidad  - rig_esperada|  / 4)
+          + pesos.flexibilidad * (1 - |profesor.flexibilidad - flex_esperada|  / 4)
+          + pesos.carga_tareas * (1 - |profesor.carga_tareas - carga_esperada| / 4)
+          + pesos.estilo       * (1 - |profesor.estilo       - estilo_esp|     / 4)
+          + pesos.exp_jovenes  * (1 - |profesor.exp_jovenes  - expj_esperada|  / 4)
+          + pesos.exp_adultos  * (1 - |profesor.exp_adultos  - expa_esperada|  / 4)
+
+        AGREGAR { profesor.id, profesor.nombre, puntaje: C } A scores
+
+    FIN PARA
+
+
+    // PASO 4: Ordenar con Quick Sort descendente
+    FUNCIÓN quick_sort(lista):
+        SI LONGITUD(lista) <= 1: RETORNAR lista
+        pivote   = lista[LONGITUD(lista) / 2].puntaje
+        izquierda = [ x SI x.puntaje > pivote ]
+        centro    = [ x SI x.puntaje = pivote ]
+        derecha   = [ x SI x.puntaje < pivote ]
+        RETORNAR quick_sort(izquierda) + centro + quick_sort(derecha)
+    FIN FUNCIÓN
+
+    scores_ordenados = quick_sort(scores)
+
+
+    // PASO 5: Retornar recomendación
+    RETORNAR {
+        recomendado:   scores_ordenados[0],
+        top3:          scores_ordenados[0..2],
+        justificacion: "Profesor " + scores_ordenados[0].nombre +
+                       " recomendado con C = " + scores_ordenados[0].puntaje
+    }
+
+FIN FUNCIÓN
+
+
+// Complejidad total: O(n + m log m)
+// n = estudiantes del grupo | m = profesores disponibles

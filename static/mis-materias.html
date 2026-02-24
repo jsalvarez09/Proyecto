@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mis Materias · Motor de Recomendación Docente</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div id="navbar"></div>
+
+  <div class="layout">
+    <div id="sidebar"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1 class="page-title">📚 Materias</h1>
+      </div>
+
+      <div id="alert-container"></div>
+
+      <!-- TABS -->
+      <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem">
+        <button class="btn btn-primary" id="tab-disponibles" onclick="showTab('disponibles')">🌐 Disponibles</button>
+        <button class="btn btn-secondary" id="tab-inscritas" onclick="showTab('inscritas')">✅ Mis inscritas</button>
+      </div>
+
+      <!-- DISPONIBLES -->
+      <div id="panel-disponibles">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Materias disponibles</span>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Materia</th><th>Código</th><th>Semestre</th><th>Profesor</th><th>Acción</th></tr>
+              </thead>
+              <tbody id="tabla-disponibles"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- INSCRITAS -->
+      <div id="panel-inscritas" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Materias en las que estoy inscrito</span>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Materia</th><th>Código</th><th>Semestre</th><th>Profesor</th><th>Notas</th></tr>
+              </thead>
+              <tbody id="tabla-inscritas"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    requireAuth()
+    const user = getUser()
+    if (!user || user.role !== 'ESTUDIANTE') {
+      window.location.href = 'dashboard.html'
+    }
+
+    renderNavbar(document.getElementById('navbar'))
+    renderSidebar(document.getElementById('sidebar'), 'mis-materias')
+
+    let todasMaterias = []
+    let misNotas = []
+
+    function showTab(tab) {
+      document.getElementById('panel-disponibles').style.display = tab === 'disponibles' ? 'block' : 'none'
+      document.getElementById('panel-inscritas').style.display = tab === 'inscritas' ? 'block' : 'none'
+      document.getElementById('tab-disponibles').className = tab === 'disponibles' ? 'btn btn-primary' : 'btn btn-secondary'
+      document.getElementById('tab-inscritas').className = tab === 'inscritas' ? 'btn btn-primary' : 'btn btn-secondary'
+    }
+
+    async function inscribirse(subjectId, nombre) {
+      if (!confirm(`¿Inscribirte en "${nombre}"?`)) return
+      try {
+        await request('POST', `/subjects/${subjectId}/self-enroll`)
+        showAlert('alert-container', `Inscrito en "${nombre}" exitosamente`, 'success')
+        await cargarDatos()
+      } catch(e) {
+        showAlert('alert-container', e.message)
+      }
+    }
+
+    async function cargarDatos() {
+      try {
+        const [materias, notasData] = await Promise.all([
+          request('GET', '/subjects/available'),
+          request('GET', '/me/grades')
+        ])
+
+        todasMaterias = materias
+        const materiasInscritas = new Set(notasData.materias.map(m => m.codigo_materia))
+
+        // Tabla disponibles
+        const tbodyDisp = document.getElementById('tabla-disponibles')
+        if (!materias.length) {
+          tbodyDisp.innerHTML = '<tr><td colspan="5" style="color:var(--gray-dark)">No hay materias disponibles</td></tr>'
+        } else {
+          tbodyDisp.innerHTML = materias.map(m => {
+            const inscrito = materiasInscritas.has(m.codigo)
+            return `
+              <tr>
+                <td><strong>${m.nombre}</strong></td>
+                <td><code>${m.codigo}</code></td>
+                <td>${m.semestre}</td>
+                <td>${m.teacher ? `👨‍🏫 ${m.teacher.nombre}` : '<span style="color:var(--gray-dark)">Sin asignar</span>'}</td>
+                <td>
+                  ${inscrito
+                    ? '<span class="badge badge-active">Inscrito</span>'
+                    : `<button class="btn btn-primary btn-sm" onclick="inscribirse(${m.id}, '${m.nombre}')">+ Inscribirse</button>`
+                  }
+                </td>
+              </tr>
+            `
+          }).join('')
+        }
+
+        // Tabla inscritas
+        const tbodyInsc = document.getElementById('tabla-inscritas')
+        const inscritas = materias.filter(m => materiasInscritas.has(m.codigo))
+        if (!inscritas.length) {
+          tbodyInsc.innerHTML = '<tr><td colspan="5" style="color:var(--gray-dark)">No estás inscrito en ninguna materia</td></tr>'
+        } else {
+          tbodyInsc.innerHTML = inscritas.map(m => `
+            <tr>
+              <td><strong>${m.nombre}</strong></td>
+              <td><code>${m.codigo}</code></td>
+              <td>${m.semestre}</td>
+              <td>${m.teacher ? `👨‍🏫 ${m.teacher.nombre}` : '<span style="color:var(--gray-dark)">Sin asignar</span>'}</td>
+              <td><a href="mis-notas.html" class="btn btn-secondary btn-sm">📋 Ver notas</a></td>
+            </tr>
+          `).join('')
+        }
+
+      } catch(e) {
+        showAlert('alert-container', e.message)
+      }
+    }
+
+    cargarDatos()
+  </script>
+</body>
+</html>

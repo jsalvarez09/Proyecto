@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Materias · Motor de Recomendación Docente</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div id="navbar"></div>
+
+  <div class="layout">
+    <div id="sidebar"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1 class="page-title">📚 Materias</h1>
+        <button class="btn btn-primary" onclick="resetSubjectForm();openModal('modal-subject')">+ Nueva materia</button>
+      </div>
+
+      <div id="alert-container"></div>
+
+      <!-- LISTA DE MATERIAS -->
+      <div id="view-list">
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Código</th>
+                  <th>Semestre</th>
+                  <th>Estudiantes</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="subjects-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- DETALLE DE MATERIA -->
+      <div id="view-detail" style="display:none">
+        <div style="margin-bottom:1rem">
+          <button class="btn btn-secondary" onclick="showList()">← Volver</button>
+        </div>
+
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-header">
+            <span class="card-title" id="detail-title"></span>
+            <span id="detail-meta" style="font-size:0.85rem;color:var(--gray-dark)"></span>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+
+          <!-- Grupo inscrito -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Estudiantes inscritos</span>
+              <button class="btn btn-secondary btn-sm" onclick="openModal('modal-enroll')">+ Inscribir</button>
+            </div>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr><th>Nombre</th><th>Código</th><th>Promedio</th><th></th></tr>
+                </thead>
+                <tbody id="enrolled-table"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Perfil colectivo -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Perfil colectivo del grupo</span>
+              <button class="btn btn-secondary btn-sm" onclick="loadProfile()">Calcular</button>
+            </div>
+            <div id="profile-container">
+              <p style="color:var(--gray-dark);font-size:0.88rem">Haz clic en "Calcular" para ver el perfil del grupo.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recomendación -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🏆 Recomendación docente</span>
+            <button class="btn btn-primary" onclick="generateRecommendation()">⚡ Generar recomendación</button>
+          </div>
+          <div id="recommendation-container">
+            <p style="color:var(--gray-dark);font-size:0.88rem">Genera una recomendación para ver el resultado aquí.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL MATERIA -->
+  <div class="modal-overlay" id="modal-subject">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="subject-modal-title">Nueva Materia</span>
+        <button class="modal-close" onclick="closeModal('modal-subject')">✕</button>
+      </div>
+      <div id="subject-modal-alert"></div>
+      <input type="hidden" id="subject-id">
+      <div class="form-group">
+        <label>Nombre de la materia</label>
+        <input type="text" id="sub-nombre" class="form-control" placeholder="Ej: Cálculo Diferencial">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Código</label>
+          <input type="text" id="sub-codigo" class="form-control" placeholder="Ej: MAT101">
+        </div>
+        <div class="form-group">
+          <label>Semestre</label>
+          <input type="text" id="sub-semestre" class="form-control" placeholder="Ej: 2026-1">
+        </div>
+      </div>
+      <div style="display:flex;gap:0.8rem;justify-content:flex-end;margin-top:1rem">
+        <button class="btn btn-secondary" onclick="closeModal('modal-subject')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveSubject()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL INSCRIBIR ESTUDIANTES -->
+  <div class="modal-overlay" id="modal-enroll">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Inscribir estudiantes</span>
+        <button class="modal-close" onclick="closeModal('modal-enroll')">✕</button>
+      </div>
+      <div class="form-group">
+        <label>Buscar estudiante</label>
+        <div style="display:flex;gap:0.5rem">
+          <input type="text" id="enroll-search" class="form-control" placeholder="Nombre o código">
+          <button class="btn btn-secondary" onclick="searchStudentsToEnroll()">Buscar</button>
+        </div>
+      </div>
+      <div id="enroll-results"></div>
+      <div style="display:flex;gap:0.8rem;justify-content:flex-end;margin-top:1rem">
+        <button class="btn btn-secondary" onclick="closeModal('modal-enroll')">Cerrar</button>
+        <button class="btn btn-primary" onclick="enrollSelected()">Inscribir seleccionados</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    requireAuth()
+    renderNavbar(document.getElementById('navbar'))
+    renderSidebar(document.getElementById('sidebar'), 'subjects')
+
+    const canEdit = requireRole('ADMIN', 'COORDINADOR')
+    let currentSubjectId = null
+
+    // ─── LISTA ───
+    async function loadSubjects() {
+      const subjects = await api.getSubjects()
+      const tbody = document.getElementById('subjects-table')
+
+      tbody.innerHTML = subjects.map(s => `
+        <tr>
+          <td><strong>${s.nombre}</strong></td>
+          <td><code>${s.codigo}</code></td>
+          <td>${s.semestre}</td>
+          <td>—</td>
+          <td>
+            <button class="btn btn-primary btn-sm" onclick="showDetail(${s.id})">Ver / Gestionar</button>
+            ${canEdit ? `<button class="btn btn-danger btn-sm" onclick="deleteSubject(${s.id})">🗑️</button>` : ''}
+          </td>
+        </tr>
+      `).join('')
+    }
+
+    function showList() {
+      document.getElementById('view-list').style.display = 'block'
+      document.getElementById('view-detail').style.display = 'none'
+      currentSubjectId = null
+      loadSubjects()
+    }
+
+    // ─── DETALLE ───
+    async function showDetail(id) {
+      currentSubjectId = id
+      const subject = await api.getSubject(id)
+
+      document.getElementById('detail-title').textContent = `${subject.nombre} (${subject.codigo})`
+      document.getElementById('detail-meta').textContent = `Semestre: ${subject.semestre}`
+
+      document.getElementById('view-list').style.display = 'none'
+      document.getElementById('view-detail').style.display = 'block'
+
+      renderEnrolled(subject.students || [])
+      loadRecommendations()
+    }
+
+    function renderEnrolled(students) {
+      const tbody = document.getElementById('enrolled-table')
+      if (!students.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:var(--gray-dark)">Sin estudiantes inscritos</td></tr>'
+        return
+      }
+      tbody.innerHTML = students.map(s => `
+        <tr>
+          <td>${s.nombre}</td>
+          <td><code>${s.codigo}</code></td>
+          <td>${s.promedio}</td>
+          <td>
+            ${canEdit ? `<button class="btn btn-danger btn-sm" onclick="removeStudent(${s.id})">✕</button>` : ''}
+          </td>
+        </tr>
+      `).join('')
+    }
+
+    async function removeStudent(studentId) {
+      if (!confirm('¿Retirar este estudiante del grupo?')) return
+      await api.removeEnrollment(currentSubjectId, studentId)
+      const subject = await api.getSubject(currentSubjectId)
+      renderEnrolled(subject.students || [])
+    }
+
+    // ─── INSCRIBIR ───
+    async function searchStudentsToEnroll() {
+      const q = document.getElementById('enroll-search').value
+      const students = await api.getStudents(q)
+      const container = document.getElementById('enroll-results')
+
+      container.innerHTML = `
+        <div class="table-wrapper" style="max-height:250px;overflow-y:auto;margin-top:0.8rem">
+          <table>
+            <thead><tr><th></th><th>Nombre</th><th>Código</th><th>Promedio</th></tr></thead>
+            <tbody>
+              ${students.map(s => `
+                <tr>
+                  <td><input type="checkbox" class="enroll-check" value="${s.id}"></td>
+                  <td>${s.nombre}</td>
+                  <td><code>${s.codigo}</code></td>
+                  <td>${s.promedio}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `
+    }
+
+    async function enrollSelected() {
+      const checks = document.querySelectorAll('.enroll-check:checked')
+      const ids = Array.from(checks).map(c => parseInt(c.value))
+      if (!ids.length) return
+
+      await api.enrollStudents(currentSubjectId, ids)
+      closeModal('modal-enroll')
+      const subject = await api.getSubject(currentSubjectId)
+      renderEnrolled(subject.students || [])
+      showAlert('alert-container', `${ids.length} estudiante(s) inscritos`, 'success')
+    }
+
+    // ─── PERFIL ───
+    async function loadProfile() {
+      try {
+        const data = await api.getGroupProfile(currentSubjectId)
+        const p = data.perfil
+        const w = data.pesos
+
+        document.getElementById('profile-container').innerHTML = `
+          <table style="font-size:0.85rem">
+            <tbody>
+              <tr><td style="padding:0.3rem 0.5rem;color:var(--gray-dark)">Edad promedio</td><td><strong>${p.edad_prom} años</strong></td></tr>
+              <tr><td style="padding:0.3rem 0.5rem;color:var(--gray-dark)">Promedio académico</td><td><strong>${p.promedio_prom}</strong></td></tr>
+              <tr><td style="padding:0.3rem 0.5rem;color:var(--gray-dark)">% que trabajan</td><td><strong>${p.pct_trabaja}%</strong></td></tr>
+              <tr><td style="padding:0.3rem 0.5rem;color:var(--gray-dark)">% recién graduados</td><td><strong>${p.pct_recien_grad}%</strong></td></tr>
+              <tr><td style="padding:0.3rem 0.5rem;color:var(--gray-dark)">Disciplina promedio</td><td><strong>${p.disciplina_prom}/5</strong></td></tr>
+              <tr><td style="padding:0.3rem 0.5rem;color:var(--gray-dark)">Madurez emocional</td><td><strong>${p.madurez_prom}/5</strong></td></tr>
+              <tr><td style="padding:0.3rem 0.5rem;color:var(--gray-dark)">Modalidad predominante</td><td><strong>${p.modalidad_pred}</strong></td></tr>
+              <tr><td style="padding:0.3rem 0.5rem;color:var(--gray-dark)">Total estudiantes</td><td><strong>${p.total_estudiantes}</strong></td></tr>
+            </tbody>
+          </table>
+          <div style="margin-top:0.8rem;font-size:0.8rem;color:var(--gray-dark)">
+            <strong>Pesos aplicados:</strong>
+            Rigurosidad ${(w.rigurosidad*100).toFixed(0)}% · 
+            Flexibilidad ${(w.flexibilidad*100).toFixed(0)}% · 
+            Carga ${(w.carga_tareas*100).toFixed(0)}% · 
+            Estilo ${(w.estilo*100).toFixed(0)}% · 
+            Exp.Jóvenes ${(w.exp_jovenes*100).toFixed(0)}% · 
+            Exp.Adultos ${(w.exp_adultos*100).toFixed(0)}%
+          </div>
+        `
+      } catch(e) {
+        showAlert('alert-container', e.message)
+      }
+    }
+
+    // ─── RECOMENDACIÓN ───
+    async function generateRecommendation() {
+      try {
+        const r = await api.recommend(currentSubjectId)
+        renderRecommendation(r)
+        showAlert('alert-container', 'Recomendación generada exitosamente', 'success')
+      } catch(e) {
+        showAlert('alert-container', e.message)
+      }
+    }
+
+    async function loadRecommendations() {
+      try {
+        const recs = await api.getRecommendations(currentSubjectId)
+        if (recs.length > 0) renderRecommendation(recs[0])
+      } catch(e) {}
+    }
+
+    function renderRecommendation(r) {
+      const top3 = r.top3 || []
+      document.getElementById('recommendation-container').innerHTML = `
+        <div class="rec-card">
+          <div style="display:flex;align-items:center;gap:1.5rem">
+            <div class="rec-score">${scoreToPercent(r.recomendado.puntaje)}</div>
+            <div>
+              <div class="rec-name">🏆 ${r.recomendado.nombre}</div>
+              <div style="font-size:0.85rem;color:var(--gray-dark)">Compatibilidad con el grupo</div>
+            </div>
+          </div>
+          <div class="rec-justification">${r.justificacion}</div>
+        </div>
+
+        <h4 style="margin:1rem 0 0.5rem;color:var(--primary)">Top 3 alternativas</h4>
+        <div class="top3-grid">
+          ${top3.map((t, i) => `
+            <div class="top3-card">
+              <div class="rank">${['🥇','🥈','🥉'][i]}</div>
+              <div class="t-name">${t.nombre}</div>
+              <div class="t-score">${scoreToPercent(t.puntaje)}</div>
+            </div>
+          `).join('')}
+        </div>
+      `
+    }
+
+    // ─── CRUD MATERIA ───
+    function resetSubjectForm() {
+      document.getElementById('subject-modal-title').textContent = 'Nueva Materia'
+      document.getElementById('subject-id').value = ''
+      document.getElementById('sub-nombre').value = ''
+      document.getElementById('sub-codigo').value = ''
+      document.getElementById('sub-semestre').value = ''
+    }
+
+    async function saveSubject() {
+      const id = document.getElementById('subject-id').value
+      const data = {
+        nombre: document.getElementById('sub-nombre').value,
+        codigo: document.getElementById('sub-codigo').value,
+        semestre: document.getElementById('sub-semestre').value
+      }
+      try {
+        if (id) {
+          await api.updateSubject(id, data)
+        } else {
+          await api.createSubject(data)
+        }
+        closeModal('modal-subject')
+        loadSubjects()
+        showAlert('alert-container', 'Materia guardada', 'success')
+      } catch(e) {
+        showAlert('subject-modal-alert', e.message)
+      }
+    }
+
+    async function deleteSubject(id) {
+      if (!confirm('¿Eliminar esta materia?')) return
+      try {
+        await api.deleteSubject(id)
+        loadSubjects()
+      } catch(e) {
+        showAlert('alert-container', e.message)
+      }
+    }
+
+    loadSubjects()
+  </script>
+</body>
+</html>

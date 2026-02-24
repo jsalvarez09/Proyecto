@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mis Notas · Motor de Recomendación Docente</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div id="navbar"></div>
+
+  <div class="layout">
+    <div id="sidebar"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1 class="page-title">📋 Mis Notas</h1>
+      </div>
+
+      <div id="alert-container"></div>
+      <div id="content"></div>
+    </main>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    requireAuth()
+
+    const user = getUser()
+    if (!user || user.role !== 'ESTUDIANTE') {
+      window.location.href = 'dashboard.html'
+    }
+
+    renderNavbar(document.getElementById('navbar'))
+    renderSidebar(document.getElementById('sidebar'), 'mis-notas')
+
+    async function loadMyGrades() {
+      const content = document.getElementById('content')
+      content.innerHTML = '<p style="color:var(--gray-dark);padding:1rem">Cargando notas...</p>'
+
+      try {
+        const data = await request('GET', '/me/grades')
+
+        if (!data.materias.length) {
+          content.innerHTML = `
+            <div class="card">
+              <p style="color:var(--gray-dark);text-align:center;padding:2rem">
+                No estás inscrito en ninguna materia aún.
+              </p>
+            </div>
+          `
+          return
+        }
+
+        content.innerHTML = data.materias.map(materia => {
+          const filas = materia.evaluaciones.map(e => `
+            <tr>
+              <td>${e.evaluacion}</td>
+              <td style="text-align:center"><strong>${e.peso}%</strong></td>
+              <td style="text-align:center">
+                ${e.score !== null
+                  ? `<strong style="color:${e.score >= 3 ? 'var(--success)' : 'var(--danger)'}">${e.score}</strong>`
+                  : '<span style="color:var(--gray-dark)">Pendiente</span>'
+                }
+              </td>
+            </tr>
+          `).join('')
+
+          const notaFinal = materia.nota_final !== null
+            ? `<span style="font-size:1.4rem;font-weight:700;color:${materia.nota_final >= 3 ? 'var(--success)' : 'var(--danger)'}">
+                ${materia.nota_final}
+                <span class="badge ${materia.nota_final >= 3 ? 'badge-active' : 'badge-inactive'}" style="font-size:0.8rem;margin-left:0.5rem">
+                  ${materia.nota_final >= 3 ? 'Aprobado' : 'Reprobado'}
+                </span>
+              </span>`
+            : '<span style="color:var(--gray-dark)">Notas pendientes</span>'
+
+          return `
+            <div class="card" style="margin-bottom:1.5rem">
+              <div class="card-header">
+                <span class="card-title">📚 ${materia.materia}</span>
+                <span style="font-size:0.85rem;color:var(--gray-dark)">${materia.codigo_materia} · ${materia.semestre}</span>
+              </div>
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr><th>Evaluación</th><th style="text-align:center">Peso</th><th style="text-align:center">Nota</th></tr>
+                  </thead>
+                  <tbody>${filas}</tbody>
+                </table>
+              </div>
+              <div style="padding:1rem;border-top:1px solid var(--border);display:flex;align-items:center;gap:1rem">
+                <span style="color:var(--gray-dark);font-size:0.9rem">Nota final:</span>
+                ${notaFinal}
+              </div>
+            </div>
+          `
+        }).join('')
+
+      } catch(e) {
+        showAlert('alert-container', e.message)
+        content.innerHTML = ''
+      }
+    }
+
+    loadMyGrades()
+  </script>
+</body>
+</html>

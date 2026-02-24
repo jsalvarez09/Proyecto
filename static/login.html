@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login · Motor de Recomendación Docente</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="icon">🎓</div>
+        <h1>Motor de Recomendación Docente</h1>
+      </div>
+
+      <div id="alert-container"></div>
+
+      <div class="form-group">
+        <label>Correo electrónico</label>
+        <input type="email" id="email" class="form-control" placeholder="admin@motor.com">
+      </div>
+
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="password" class="form-control" placeholder="••••••••">
+      </div>
+
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:0.5rem" onclick="login()">
+        Iniciar sesión
+      </button>
+
+      <p style="text-align:center;margin-top:1.5rem;font-size:0.85rem">
+        <a href="index.html" style="color:var(--primary-light)">← Volver al inicio</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    if (getToken()) window.location.href = 'dashboard.html'
+
+    async function login() {
+      const email = document.getElementById('email').value.trim()
+      const password = document.getElementById('password').value
+
+      if (!email || !password) {
+        showAlert('alert-container', 'Completa todos los campos')
+        return
+      }
+
+      try {
+        const data = await api.login(email, password)
+        setSession(data.access_token, data.user)
+        window.location.href = 'dashboard.html'
+      } catch (e) {
+        showAlert('alert-container', e.message)
+      }
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') login()
+    })
+  </script>
+
+</body>
+</html>

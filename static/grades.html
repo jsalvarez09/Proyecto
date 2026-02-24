@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notas · Motor de Recomendación Docente</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div id="navbar"></div>
+
+  <div class="layout">
+    <div id="sidebar"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1 class="page-title">📝 Notas y Evaluaciones</h1>
+      </div>
+
+      <div id="alert-container"></div>
+
+      <!-- SELECTOR DE MATERIA -->
+      <div class="card" style="margin-bottom:1rem">
+        <div class="form-group" style="margin:0">
+          <label>Selecciona una materia</label>
+          <select id="subject-select" class="form-control" style="max-width:400px" onchange="loadSubjectData()">
+            <option value="">-- Seleccionar --</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="subject-content" style="display:none">
+
+        <!-- EVALUACIONES -->
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-header">
+            <span class="card-title">⚖️ Evaluaciones</span>
+            <div style="display:flex;align-items:center;gap:1rem">
+              <span id="weight-indicator" style="font-size:0.85rem"></span>
+              <button class="btn btn-secondary btn-sm" onclick="openModal('modal-assessment')">+ Agregar</button>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Evaluación</th><th>Peso %</th><th>Acciones</th></tr>
+              </thead>
+              <tbody id="assessments-table"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABLA DE NOTAS -->
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-header">
+            <span class="card-title">📊 Registro de Notas</span>
+            <button class="btn btn-primary btn-sm" onclick="loadFinalGrades()">Ver ranking final</button>
+          </div>
+          <div class="table-wrapper" id="grades-table-container">
+            <p style="color:var(--gray-dark);font-size:0.88rem">Agrega evaluaciones para registrar notas.</p>
+          </div>
+        </div>
+
+        <!-- RANKING FINAL -->
+        <div class="card" id="ranking-card" style="display:none">
+          <div class="card-header">
+            <span class="card-title">🏆 Ranking Final</span>
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('ranking-card').style.display='none'">Cerrar</button>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Estudiante</th><th>Código</th><th>Nota Final</th><th>Estado</th></tr>
+              </thead>
+              <tbody id="ranking-table"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL EVALUACIÓN -->
+  <div class="modal-overlay" id="modal-assessment">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="assessment-modal-title">Nueva Evaluación</span>
+        <button class="modal-close" onclick="closeModal('modal-assessment')">✕</button>
+      </div>
+      <div id="assessment-modal-alert"></div>
+      <input type="hidden" id="assessment-id">
+      <div class="form-group">
+        <label>Nombre de la evaluación</label>
+        <input type="text" id="a-name" class="form-control" placeholder="Ej: Parcial 1, Proyecto Final">
+      </div>
+      <div class="form-group">
+        <label>Peso (%)</label>
+        <input type="number" id="a-weight" class="form-control" min="1" max="100" placeholder="Ej: 30">
+      </div>
+      <div style="display:flex;gap:0.8rem;justify-content:flex-end;margin-top:1rem">
+        <button class="btn btn-secondary" onclick="closeModal('modal-assessment')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveAssessment()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL REGISTRAR NOTA -->
+  <div class="modal-overlay" id="modal-grade">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Registrar Nota</span>
+        <button class="modal-close" onclick="closeModal('modal-grade')">✕</button>
+      </div>
+      <div id="grade-modal-alert"></div>
+      <input type="hidden" id="grade-assessment-id">
+      <input type="hidden" id="grade-student-id">
+      <div class="form-group">
+        <label id="grade-label">Nota</label>
+        <input type="number" id="g-score" class="form-control" min="0" max="5" step="0.1" placeholder="0.0 - 5.0">
+      </div>
+      <div style="display:flex;gap:0.8rem;justify-content:flex-end;margin-top:1rem">
+        <button class="btn btn-secondary" onclick="closeModal('modal-grade')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveGrade()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    requireAuth()
+    renderNavbar(document.getElementById('navbar'))
+    renderSidebar(document.getElementById('sidebar'), 'grades')
+
+    const canEdit = requireRole('ADMIN', 'COORDINADOR')
+    let currentSubjectId = null
+    let currentAssessments = []
+    let currentGrades = []
+
+    async function loadSubjectSelect() {
+      const subjects = await api.getSubjects()
+      const select = document.getElementById('subject-select')
+      subjects.forEach(s => {
+        const opt = document.createElement('option')
+        opt.value = s.id
+        opt.textContent = `${s.nombre} (${s.semestre})`
+        select.appendChild(opt)
+      })
+    }
+
+    async function loadSubjectData() {
+      const id = document.getElementById('subject-select').value
+      if (!id) {
+        document.getElementById('subject-content').style.display = 'none'
+        return
+      }
+      currentSubjectId = id
+      document.getElementById('subject-content').style.display = 'block'
+      document.getElementById('ranking-card').style.display = 'none'
+      await loadAssessments()
+      await loadGrades()
+    }
+
+    // ─── ASSESSMENTS ───
+    async function loadAssessments() {
+      const assessments = await request('GET', `/subjects/${currentSubjectId}/assessments`)
+      currentAssessments = assessments
+      const weights = await request('GET', `/subjects/${currentSubjectId}/assessments/validate-weights`)
+
+      const indicator = document.getElementById('weight-indicator')
+      indicator.textContent = `Pesos: ${weights.total_weight}% / 100%`
+      indicator.style.color = weights.is_valid ? 'var(--success)' : 'var(--warning)'
+
+      const tbody = document.getElementById('assessments-table')
+      if (!assessments.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="color:var(--gray-dark)">Sin evaluaciones</td></tr>'
+        return
+      }
+
+      tbody.innerHTML = assessments.map(a => `
+        <tr>
+          <td>${a.name}</td>
+          <td><strong>${a.weight_percent}%</strong></td>
+          <td>
+            ${canEdit ? `
+              <button class="btn btn-danger btn-sm" onclick="deleteAssessment(${a.id})">🗑️</button>
+            ` : '—'}
+          </td>
+        </tr>
+      `).join('')
+    }
+
+    async function saveAssessment() {
+      const id = document.getElementById('assessment-id').value
+      const data = {
+        name: document.getElementById('a-name').value,
+        weight_percent: parseFloat(document.getElementById('a-weight').value)
+      }
+
+      try {
+        await request('POST', `/subjects/${currentSubjectId}/assessments`, data)
+        closeModal('modal-assessment')
+        document.getElementById('a-name').value = ''
+        document.getElementById('a-weight').value = ''
+        await loadAssessments()
+        await loadGrades()
+        showAlert('alert-container', 'Evaluación agregada', 'success')
+      } catch(e) {
+        showAlert('assessment-modal-alert', e.message)
+      }
+    }
+
+    async function deleteAssessment(id) {
+      if (!confirm('¿Eliminar esta evaluación? Se eliminarán también las notas asociadas.')) return
+      try {
+        await request('DELETE', `/subjects/${currentSubjectId}/assessments/${id}`)
+        await loadAssessments()
+        await loadGrades()
+        showAlert('alert-container', 'Evaluación eliminada', 'success')
+      } catch(e) {
+        showAlert('alert-container', e.message)
+      }
+    }
+
+    // ─── GRADES ───
+    async function loadGrades() {
+      if (!currentAssessments.length) {
+        document.getElementById('grades-table-container').innerHTML =
+          '<p style="color:var(--gray-dark);font-size:0.88rem;padding:1rem">Agrega evaluaciones para registrar notas.</p>'
+        return
+      }
+
+      const data = await request('GET', `/subjects/${currentSubjectId}/grades`)
+      currentGrades = data.grades
+      const assessments = data.assessments
+
+      const headers = assessments.map(a => `<th>${a.name}<br><small>${a.weight}%</small></th>`).join('')
+      const rows = data.grades.map(g => {
+        const notas = assessments.map(a => {
+          const nota = g.notas[a.name]
+          const score = nota?.score
+          return `
+            <td style="text-align:center">
+              ${score !== null && score !== undefined
+                ? `<span style="font-weight:600">${score}</span>`
+                : '—'
+              }
+              ${canEdit ? `
+                <br><button class="btn btn-secondary btn-sm" style="margin-top:4px"
+                  onclick="openGradeModal(${a.id}, ${g.student_id}, '${g.student_nombre}', '${a.name}', ${score ?? 'null'})">
+                  ✏️
+                </button>
+              ` : ''}
+            </td>
+          `
+        }).join('')
+
+        const notaFinal = g.nota_final !== null
+          ? `<strong style="color:${g.nota_final >= 3 ? 'var(--success)' : 'var(--danger)'}">${g.nota_final}</strong>`
+          : '<span style="color:var(--gray-dark)">Pendiente</span>'
+
+        return `
+          <tr>
+            <td>${g.student_nombre}<br><small style="color:var(--gray-dark)">${g.student_codigo}</small></td>
+            ${notas}
+            <td style="text-align:center">${notaFinal}</td>
+          </tr>
+        `
+      }).join('')
+
+      document.getElementById('grades-table-container').innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Estudiante</th>
+              ${headers}
+              <th>Nota Final</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `
+    }
+
+    function openGradeModal(assessmentId, studentId, studentName, assessmentName, currentScore) {
+      document.getElementById('grade-assessment-id').value = assessmentId
+      document.getElementById('grade-student-id').value = studentId
+      document.getElementById('grade-label').textContent = `Nota de ${studentName} — ${assessmentName}`
+      document.getElementById('g-score').value = currentScore ?? ''
+      openModal('modal-grade')
+    }
+
+    async function saveGrade() {
+      const data = {
+        assessment_id: parseInt(document.getElementById('grade-assessment-id').value),
+        student_id: parseInt(document.getElementById('grade-student-id').value),
+        score: parseFloat(document.getElementById('g-score').value)
+      }
+
+      try {
+        await request('POST', '/grades', data)
+        closeModal('modal-grade')
+        await loadGrades()
+        showAlert('alert-container', 'Nota registrada', 'success')
+      } catch(e) {
+        showAlert('grade-modal-alert', e.message)
+      }
+    }
+
+    // ─── RANKING FINAL ───
+    async function loadFinalGrades() {
+      try {
+        const data = await request('GET', `/subjects/${currentSubjectId}/final-grades`)
+        const tbody = document.getElementById('ranking-table')
+
+        tbody.innerHTML = data.ranking.map(r => `
+          <tr>
+            <td>${r.ranking ?? '—'}</td>
+            <td>${r.student_nombre}</td>
+            <td><code>${r.student_codigo}</code></td>
+            <td>
+              ${r.nota_final !== null
+                ? `<strong style="color:${r.nota_final >= 3 ? 'var(--success)' : 'var(--danger)'}">${r.nota_final}</strong>`
+                : '<span style="color:var(--gray-dark)">Incompleto</span>'
+              }
+            </td>
+            <td>
+              ${r.nota_final !== null
+                ? `<span class="badge ${r.nota_final >= 3 ? 'badge-active' : 'badge-inactive'}">${r.nota_final >= 3 ? 'Aprobado' : 'Reprobado'}</span>`
+                : '—'
+              }
+            </td>
+          </tr>
+        `).join('')
+
+        document.getElementById('ranking-card').style.display = 'block'
+      } catch(e) {
+        showAlert('alert-container', e.message)
+      }
+    }
+
+    loadSubjectSelect()
+  </script>
+</body>
+</html>

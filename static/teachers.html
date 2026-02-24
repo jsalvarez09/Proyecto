@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profesores · Motor de Recomendación Docente</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div id="navbar"></div>
+
+  <div class="layout">
+    <div id="sidebar"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1 class="page-title">👨‍🏫 Profesores</h1>
+        <button class="btn btn-primary" onclick="resetForm();openModal('modal-teacher')">+ Nuevo profesor</button>
+      </div>
+
+      <div id="alert-container"></div>
+
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Edad</th>
+                <th>Rigurosidad</th>
+                <th>Flexibilidad</th>
+                <th>Carga</th>
+                <th>Estilo</th>
+                <th>Exp. Jóvenes</th>
+                <th>Exp. Adultos</th>
+                <th>Modalidad</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="teachers-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modal-teacher">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="modal-title">Nuevo Profesor</span>
+        <button class="modal-close" onclick="closeModal('modal-teacher')">✕</button>
+      </div>
+
+      <div id="modal-alert"></div>
+      <input type="hidden" id="teacher-id">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nombre completo</label>
+          <input type="text" id="t-nombre" class="form-control">
+        </div>
+        <div class="form-group">
+          <label>Edad</label>
+          <input type="number" id="t-edad" class="form-control" min="25" max="70">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Modalidad preferida</label>
+          <select id="t-modalidad" class="form-control">
+            <option value="presencial">Presencial</option>
+            <option value="virtual">Virtual</option>
+            <option value="mixta">Mixta</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Estilo de enseñanza</label>
+          <select id="t-estilo" class="form-control">
+            <option value="1">1 - Amigable</option>
+            <option value="2">2 - Neutro</option>
+            <option value="3">3 - Formal/Serio</option>
+          </select>
+        </div>
+      </div>
+
+      ${['rigurosidad','flexibilidad','carga_tareas','exp_jovenes','exp_adultos'].map(f => '').join('')}
+
+      <div class="form-group">
+        <label>Rigurosidad: <span id="rig-val">3</span>/5</label>
+        <div class="slider-group">
+          <span>1</span>
+          <input type="range" id="t-rigurosidad" min="1" max="5" value="3" oninput="document.getElementById('rig-val').textContent=this.value">
+          <span>5</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Flexibilidad: <span id="flex-val">3</span>/5</label>
+        <div class="slider-group">
+          <span>1</span>
+          <input type="range" id="t-flexibilidad" min="1" max="5" value="3" oninput="document.getElementById('flex-val').textContent=this.value">
+          <span>5</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Carga de tareas: <span id="carga-val">3</span>/5</label>
+        <div class="slider-group">
+          <span>1</span>
+          <input type="range" id="t-carga" min="1" max="5" value="3" oninput="document.getElementById('carga-val').textContent=this.value">
+          <span>5</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Exp. grupos jóvenes: <span id="expj-val">3</span>/5</label>
+        <div class="slider-group">
+          <span>1</span>
+          <input type="range" id="t-expj" min="1" max="5" value="3" oninput="document.getElementById('expj-val').textContent=this.value">
+          <span>5</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Exp. grupos adultos: <span id="expa-val">3</span>/5</label>
+        <div class="slider-group">
+          <span>1</span>
+          <input type="range" id="t-expa" min="1" max="5" value="3" oninput="document.getElementById('expa-val').textContent=this.value">
+          <span>5</span>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0.8rem;justify-content:flex-end;margin-top:1rem">
+        <button class="btn btn-secondary" onclick="closeModal('modal-teacher')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveTeacher()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    requireAuth()
+    renderNavbar(document.getElementById('navbar'))
+    renderSidebar(document.getElementById('sidebar'), 'teachers')
+
+    const canEdit = requireRole('ADMIN', 'COORDINADOR')
+    const estilos = { 1: 'Amigable', 2: 'Neutro', 3: 'Formal' }
+
+    async function loadTeachers() {
+      const teachers = await api.getTeachers()
+      const tbody = document.getElementById('teachers-table')
+
+      tbody.innerHTML = teachers.map(t => `
+        <tr>
+          <td>${t.nombre}</td>
+          <td>${t.edad}</td>
+          <td>${t.rigurosidad}/5</td>
+          <td>${t.flexibilidad}/5</td>
+          <td>${t.carga_tareas}/5</td>
+          <td>${estilos[t.estilo]}</td>
+          <td>${t.exp_jovenes}/5</td>
+          <td>${t.exp_adultos}/5</td>
+          <td>${t.modalidad_preferida}</td>
+          <td><span class="badge ${t.is_active ? 'badge-active' : 'badge-inactive'}">${t.is_active ? 'Activo' : 'Inactivo'}</span></td>
+          <td>
+            ${canEdit ? `
+              <button class="btn btn-secondary btn-sm" onclick="editTeacher(${JSON.stringify(t).replace(/"/g, '&quot;')})">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteTeacher(${t.id})">🗑️</button>
+            ` : '—'}
+          </td>
+        </tr>
+      `).join('')
+    }
+
+    function setSlider(id, valId, value) {
+      document.getElementById(id).value = value
+      document.getElementById(valId).textContent = value
+    }
+
+    function resetForm() {
+      document.getElementById('modal-title').textContent = 'Nuevo Profesor'
+      document.getElementById('teacher-id').value = ''
+      document.getElementById('t-nombre').value = ''
+      document.getElementById('t-edad').value = ''
+      document.getElementById('t-modalidad').value = 'presencial'
+      document.getElementById('t-estilo').value = '1'
+      setSlider('t-rigurosidad', 'rig-val', 3)
+      setSlider('t-flexibilidad', 'flex-val', 3)
+      setSlider('t-carga', 'carga-val', 3)
+      setSlider('t-expj', 'expj-val', 3)
+      setSlider('t-expa', 'expa-val', 3)
+    }
+
+    function editTeacher(t) {
+      document.getElementById('modal-title').textContent = 'Editar Profesor'
+      document.getElementById('teacher-id').value = t.id
+      document.getElementById('t-nombre').value = t.nombre
+      document.getElementById('t-edad').value = t.edad
+      document.getElementById('t-modalidad').value = t.modalidad_preferida
+      document.getElementById('t-estilo').value = t.estilo
+      setSlider('t-rigurosidad', 'rig-val', t.rigurosidad)
+      setSlider('t-flexibilidad', 'flex-val', t.flexibilidad)
+      setSlider('t-carga', 'carga-val', t.carga_tareas)
+      setSlider('t-expj', 'expj-val', t.exp_jovenes)
+      setSlider('t-expa', 'expa-val', t.exp_adultos)
+      openModal('modal-teacher')
+    }
+
+    async function saveTeacher() {
+      const id = document.getElementById('teacher-id').value
+      const data = {
+        nombre: document.getElementById('t-nombre').value,
+        edad: parseInt(document.getElementById('t-edad').value),
+        modalidad_preferida: document.getElementById('t-modalidad').value,
+        estilo: parseInt(document.getElementById('t-estilo').value),
+        rigurosidad: parseInt(document.getElementById('t-rigurosidad').value),
+        flexibilidad: parseInt(document.getElementById('t-flexibilidad').value),
+        carga_tareas: parseInt(document.getElementById('t-carga').value),
+        exp_jovenes: parseInt(document.getElementById('t-expj').value),
+        exp_adultos: parseInt(document.getElementById('t-expa').value)
+      }
+
+      try {
+        if (id) {
+          await api.updateTeacher(id, data)
+        } else {
+          await api.createTeacher(data)
+        }
+        closeModal('modal-teacher')
+        loadTeachers()
+        showAlert('alert-container', id ? 'Profesor actualizado' : 'Profesor creado', 'success')
+      } catch (e) {
+        showAlert('modal-alert', e.message)
+      }
+    }
+
+    async function deleteTeacher(id) {
+      if (!confirm('¿Desactivar este profesor?')) return
+      try {
+        await api.deleteTeacher(id)
+        loadTeachers()
+        showAlert('alert-container', 'Profesor desactivado', 'success')
+      } catch (e) {
+        showAlert('alert-container', e.message)
+      }
+    }
+
+    loadTeachers()
+  </script>
+</body>
+</html>

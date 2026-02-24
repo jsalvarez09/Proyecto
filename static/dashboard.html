@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard · Motor de Recomendación Docente</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div id="navbar"></div>
+
+  <div class="layout">
+    <div id="sidebar"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1 class="page-title">Dashboard</h1>
+      </div>
+
+      <div id="stats-section"></div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Accesos rápidos</span>
+        </div>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap" id="accesos-rapidos"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    requireAuth()
+    renderNavbar(document.getElementById('navbar'))
+    renderSidebar(document.getElementById('sidebar'), 'dashboard')
+
+    const user = getUser()
+    const isEstudiante = user?.role === 'ESTUDIANTE'
+
+    // Accesos rápidos según rol
+    const accesos = document.getElementById('accesos-rapidos')
+    if (isEstudiante) {
+      accesos.innerHTML = `
+        <a href="mis-materias.html" class="btn btn-secondary">📚 Mis Materias</a>
+        <a href="mis-notas.html" class="btn btn-primary">📋 Ver mis notas</a>
+      `
+    } else {
+      accesos.innerHTML = `
+        <a href="students.html" class="btn btn-secondary">👨‍🎓 Gestionar Estudiantes</a>
+        <a href="teachers.html" class="btn btn-secondary">👨‍🏫 Gestionar Profesores</a>
+        <a href="subjects.html" class="btn btn-primary">📚 Ir a Materias</a>
+      `
+    }
+
+    // Stats: solo para no estudiantes
+    if (!isEstudiante) {
+      document.getElementById('stats-section').innerHTML = `
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="total-students">—</div>
+            <div class="stat-label">👨‍🎓 Estudiantes</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="total-teachers">—</div>
+            <div class="stat-label">👨‍🏫 Profesores</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="total-subjects">—</div>
+            <div class="stat-label">📚 Materias</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="total-recs">—</div>
+            <div class="stat-label">🏆 Recomendaciones</div>
+          </div>
+        </div>
+      `
+
+      async function loadStats() {
+        const [students, teachers, subjects] = await Promise.all([
+          api.getStudents(),
+          api.getTeachers(),
+          api.getSubjects()
+        ])
+
+        document.getElementById('total-students').textContent = students.length
+        document.getElementById('total-teachers').textContent = teachers.length
+        document.getElementById('total-subjects').textContent = subjects.length
+
+        let recs = 0
+        for (const s of subjects) {
+          const r = await api.getRecommendations(s.id)
+          recs += r.length
+        }
+        document.getElementById('total-recs').textContent = recs
+      }
+
+      loadStats()
+    }
+  </script>
+
+</body>
+</html>
